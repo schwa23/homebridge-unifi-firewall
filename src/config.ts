@@ -1,6 +1,10 @@
 export interface UnifiFirewallPlatformConfig {
   unifi: UnifiControllerConfig;
-  rules: UnifiFirewallRuleConfig[];
+  rules?: UnifiFirewallRuleConfig[];
+  includeRuleIndexes?: string[];
+  excludeRuleIndexes?: string[];
+  hiddenRuleIndexes?: string[];
+  customNames?: Record<string, string>;
 }
 
 export interface UnifiControllerConfig {
