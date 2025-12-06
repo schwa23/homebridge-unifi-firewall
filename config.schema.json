@@ -38,6 +38,38 @@
           }
         }
       },
+      "includeRuleIndexes": {
+        "type": "array",
+        "title": "Include Rule Indexes",
+        "description": "Optional list of firewall rule indexes to expose. When omitted, all rules are eligible unless explicitly excluded or hidden.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "excludeRuleIndexes": {
+        "type": "array",
+        "title": "Exclude Rule Indexes",
+        "description": "Firewall rule indexes to ignore (even if they would otherwise be included).",
+        "items": {
+          "type": "string"
+        }
+      },
+      "hiddenRuleIndexes": {
+        "type": "array",
+        "title": "Hidden Rule Indexes",
+        "description": "Firewall rule indexes to hide from Homebridge while keeping them available for discovery summaries.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "customNames": {
+        "type": "object",
+        "title": "Custom Rule Names",
+        "description": "Map of firewall rule index to the name that should be displayed in Homebridge. Defaults to the controller rule name.",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
       "rules": {
         "type": "array",
         "items": {

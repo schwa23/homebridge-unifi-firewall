@@ -77,11 +77,117 @@ export class UnifiFirewallPlatform implements DynamicPlatformPlugin {
     }
     const fwRules = await site.firewall.getRules();
 
-    for (const rule of this.config.rules) {
-      const fwRule = fwRules.find((r) => r.rule_index === rule.id);
-      if (!fwRule) {
-        throw new Error(`Rule index <${rule.id}> was not found`);
+    const explicitRuleConfigs = new Map(
+      (this.config.rules ?? []).map((rule) => [rule.id, rule])
+    );
+
+    const includeRuleIndexes =
+      this.config.includeRuleIndexes && this.config.includeRuleIndexes.length
+        ? this.config.includeRuleIndexes
+        : this.config.rules?.map((rule) => rule.id) ?? [];
+
+    const includeSet = new Set<string>(
+      includeRuleIndexes.length
+        ? includeRuleIndexes.map(String)
+        : fwRules.map((rule) => `${rule.rule_index}`)
+    );
+    const excludeSet = new Set<string>(
+      (this.config.excludeRuleIndexes ?? []).map(String)
+    );
+    const hiddenSet = new Set<string>(
+      (this.config.hiddenRuleIndexes ?? []).map(String)
+    );
+    const customNames = this.config.customNames ?? {};
+
+    const missingRuleIndexes = [...includeSet].filter(
+      (ruleIndex) => !fwRules.find((rule) => `${rule.rule_index}` === ruleIndex)
+    );
+    if (missingRuleIndexes.length) {
+      this.log.warn(
+        `The following rule indexes were requested but not found on the controller: ${missingRuleIndexes.join(
+          ", "
+        )}`
+      );
+    }
+
+    const hiddenRules = fwRules.filter((rule) => {
+      const ruleIndex = `${rule.rule_index}`;
+      return includeSet.has(ruleIndex) && hiddenSet.has(ruleIndex);
+    });
+    const excludedRules = fwRules.filter((rule) => {
+      const ruleIndex = `${rule.rule_index}`;
+      return includeSet.has(ruleIndex) && excludeSet.has(ruleIndex);
+    });
+
+    const discoverableRules = fwRules.filter((rule) => {
+      const ruleIndex = `${rule.rule_index}`;
+      if (!includeSet.has(ruleIndex)) {
+        return false;
       }
+      if (excludeSet.has(ruleIndex) || hiddenSet.has(ruleIndex)) {
+        return false;
+      }
+      return true;
+    });
+
+    const discoverableRuleIndexes = new Set(
+      discoverableRules.map((rule) => `${rule.rule_index}`)
+    );
+    const cachedAccessoriesToRemove = this.accessories.filter((accessory) => {
+      const cachedRuleId = accessory.context.rule?.id;
+      if (!cachedRuleId) {
+        return false;
+      }
+      return !discoverableRuleIndexes.has(cachedRuleId);
+    });
+
+    if (cachedAccessoriesToRemove.length) {
+      this.log.info(
+        `Unregistering ${cachedAccessoriesToRemove.length} cached accessory(ies) for hidden or excluded rules.`
+      );
+      this.api.unregisterPlatformAccessories(
+        PLUGIN_NAME,
+        PLATFORM_NAME,
+        cachedAccessoriesToRemove
+      );
+    }
+
+    this.log.info(
+      `Discovered ${
+        discoverableRules.length
+      } firewall rule(s) for Homebridge: ${
+        discoverableRules.map((rule) => `${rule.rule_index}`).join(", ") ||
+        "none"
+      }`
+    );
+    if (hiddenRules.length) {
+      this.log.info(
+        `Hidden firewall rule(s): ${hiddenRules
+          .map((rule) => `${rule.rule_index}`)
+          .join(", ")}`
+      );
+    }
+    if (excludedRules.length) {
+      this.log.info(
+        `Excluded firewall rule(s): ${excludedRules
+          .map((rule) => `${rule.rule_index}`)
+          .join(", ")}`
+      );
+    }
+
+    for (const fwRule of discoverableRules) {
+      const ruleIndex = `${fwRule.rule_index}`;
+      const ruleConfig = explicitRuleConfigs.get(ruleIndex);
+      const name =
+        customNames[ruleIndex] ?? ruleConfig?.name ?? fwRule.name ?? ruleIndex;
+      const inverted = ruleConfig?.inverted ?? false;
+
+      const rule: UnifiFirewallRuleConfig = {
+        id: ruleIndex,
+        name,
+        inverted,
+      };
+
       const uuid = this.api.hap.uuid.generate(rule.id);
 
       // see if an accessory with the same uuid has already been registered and restored from
@@ -96,18 +202,12 @@ export class UnifiFirewallPlatform implements DynamicPlatformPlugin {
           `Restoring existing accessory from cache: ${existingAccessory.displayName}`
         );
 
-        // if you need to update the accessory.context then you should run `api.updatePlatformAccessories`. eg.:
-        // existingAccessory.context.rule = rule;
-        // this.api.updatePlatformAccessories([existingAccessory]);
+        existingAccessory.context.rule = rule;
+        this.api.updatePlatformAccessories([existingAccessory]);
 
         // create the accessory handler for the restored accessory
         // this is imported from `platformAccessory.ts`
         new UnifiFirewallSwitch(this, existingAccessory, fwRule, rule.inverted);
-
-        // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, eg.:
-        // remove platform accessories when no longer present
-        // this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [existingAccessory]);
-        // this.log.info('Removing existing accessory from cache:', existingAccessory.displayName);
       } else {
         // the accessory does not yet exist, so we need to create it
         this.log.info(`Adding new accessory: ${rule.name} <${rule.id}>`);
