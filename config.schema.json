@@ -14,15 +14,18 @@
             "type": "string",
             "required": true
           },
+          "apiKey": {
+            "title": "API Key",
+            "description": "Preferred authentication method for UniFi OS controllers. Provide a token generated from the controller's user settings.",
+            "type": "string"
+          },
           "username": {
             "title": "Username",
-            "type": "string",
-            "required": true
+            "type": "string"
           },
           "password": {
             "title": "Password",
-            "type": "string",
-            "required": true
+            "type": "string"
           },
           "site": {
             "title": "Site ID",
@@ -35,8 +38,18 @@
             "type": "boolean",
             "required": true,
             "default": false
+          },
+          "useLocalCredentials": {
+            "title": "Use Local Credentials",
+            "description": "Force username/password authentication (for local administrator accounts) even when an API key is present.",
+            "type": "boolean",
+            "default": false
           }
-        }
+        },
+        "oneOf": [
+          { "required": ["apiKey"] },
+          { "required": ["username", "password"] }
+        ]
       },
       "includeRuleIndexes": {
         "type": "array",

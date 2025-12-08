@@ -14,8 +14,7 @@ Add the platform to your Homebridge `config.json`:
       "name": "UniFi Firewall",
       "unifi": {
         "url": "https://unifi.local:8443",
-        "username": "homebridge",
-        "password": "super-secret",
+        "apiKey": "your-api-key",
         "site": "default",
         "strictSSL": false
       },
@@ -29,6 +28,20 @@ Add the platform to your Homebridge `config.json`:
   ]
 }
 ```
+
+### Authentication
+
+- **`apiKey`**: Recommended for UniFi OS controllers. Generate a local API key from the controller UI and supply it here.
+- **`username`/`password`**: Use credentials for a local administrator account. Set `useLocalCredentials` to `true` to force this
+  path when an API key is also present (otherwise the API key is preferred).
+
+The plugin requires exactly one authentication method. It will log an error and skip discovery if neither (or both) are provided.
+
+#### SSL for local controllers
+
+Many local controllers use self-signed certificates. If you see SSL validation errors when connecting, set `strictSSL` to `false`
+in the UniFi configuration block to allow the connection. Only disable certificate validation when you trust the controller's
+network.
 
 ### Discovery Controls
 

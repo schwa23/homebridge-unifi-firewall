@@ -29,11 +29,15 @@ export class UnifiFirewallPlatform implements DynamicPlatformPlugin {
     rule: UnifiFirewallRuleConfig;
   }>[] = [];
 
+  private configValid: boolean;
+
   constructor(
     public readonly log: Logger,
     public readonly config: PlatformConfig & UnifiFirewallPlatformConfig,
     public readonly api: API
   ) {
+    this.configValid = this.validateConfig();
+
     this.log.debug(`Finished initializing platform: ${this.config.name}`);
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
@@ -45,6 +49,28 @@ export class UnifiFirewallPlatform implements DynamicPlatformPlugin {
       // run the method to discover / register your devices as accessories
       this.discoverDevices();
     });
+  }
+
+  private validateConfig() {
+    const { unifi } = this.config;
+    const hasCredentials = Boolean(unifi.username && unifi.password);
+    const hasApiKey = Boolean(unifi.apiKey);
+
+    if (hasApiKey && hasCredentials) {
+      this.log.error(
+        "Both an API key and username/password are configured. Please choose only one UniFi authentication method."
+      );
+      return false;
+    }
+
+    if (!hasApiKey && !hasCredentials) {
+      this.log.error(
+        "No UniFi authentication details provided. Configure either an API key or a local username/password."
+      );
+      return false;
+    }
+
+    return true;
   }
 
   /**
@@ -66,8 +92,29 @@ export class UnifiFirewallPlatform implements DynamicPlatformPlugin {
    * must not be registered again to prevent "duplicate UUID" errors.
    */
   async discoverDevices() {
-    const controller = new Controller(this.config.unifi);
-    await controller.login();
+    if (!this.configValid) {
+      this.log.error(
+        "Skipping device discovery because UniFi authentication is not configured correctly."
+      );
+      return;
+    }
+
+    const controllerConfig = {
+      ...this.config.unifi,
+      username: this.config.unifi.username ?? "",
+      password: this.config.unifi.password ?? "",
+    };
+    const controller = new Controller(controllerConfig);
+    if (this.config.unifi.apiKey && !this.config.unifi.useLocalCredentials) {
+      this.log.debug("Using UniFi API key authentication.");
+      controller.auth.autoReLogin = false;
+      controller.auth.unifiOs = true;
+      (controller.auth as unknown as { token?: string }).token =
+        this.config.unifi.apiKey;
+    } else {
+      this.log.debug("Using UniFi username/password authentication.");
+      await controller.login();
+    }
     const sites = await controller.getSites();
     const site = sites.find((site) => site.name === this.config.unifi.site);
     if (!site) {
