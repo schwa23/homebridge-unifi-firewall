@@ -9,10 +9,12 @@ export interface UnifiFirewallPlatformConfig {
 
 export interface UnifiControllerConfig {
   url: string;
-  username: string;
-  password: string;
+  username?: string;
+  password?: string;
+  apiKey?: string;
   site: string;
   strictSSL: boolean;
+  useLocalCredentials?: boolean;
 }
 
 export interface UnifiFirewallRuleConfig {
